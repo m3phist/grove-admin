@@ -36,32 +36,57 @@ export async function POST(req: Request) {
   const addressString = addressComponents.filter((c) => c !== null).join(', ');
 
   if (event.type === 'checkout.session.completed') {
-    const order = await prismadb.order.update({
-      where: {
-        id: session?.metadata?.orderId,
-      },
-      data: {
-        isPaid: true,
-        address: addressString,
-        phone: session?.customer_details?.phone || '',
-      },
-      include: {
-        orderItems: true,
-      },
-    });
+    const orderId = session?.metadata?.orderId;
 
-    const productIds = order.orderItems.map((orderItem) => orderItem.productId);
-
-    await prismadb.product.updateMany({
-      where: {
-        id: {
-          in: [...productIds],
+    try {
+      const order = await prismadb.order.update({
+        where: {
+          id: orderId,
         },
-      },
-      data: {
-        isArchived: true,
-      },
-    });
+        data: {
+          isPaid: true,
+          address: addressString,
+          phone: session?.customer_details?.phone || '',
+        },
+        include: {
+          orderItems: true,
+        },
+      });
+
+      const productIds = order.orderItems.map(
+        (orderItem) => orderItem.productId
+      );
+
+      await Promise.all(
+        productIds.map(async (productId: string) => {
+          try {
+            const product = await prismadb.product.findUnique({
+              where: {
+                id: productId,
+              },
+            });
+
+            if (product) {
+              if (product.unit > 0) {
+                await prismadb.product.update({
+                  where: {
+                    id: productId,
+                  },
+                  data: {
+                    unit: product.unit - 1,
+                    isArchived: product.unit - 1 === 0,
+                  },
+                });
+              }
+            }
+          } catch (productError) {
+            console.error('Error updating product:', productError);
+          }
+        })
+      );
+    } catch (orderError) {
+      console.error('Error updating order:', orderError);
+    }
   }
 
   return new NextResponse(null, { status: 200 });

@@ -23,7 +23,17 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(product);
+    if (!product) {
+      return new NextResponse('Product not found', { status: 404 });
+    }
+
+    // Transform the value of 'unit' to either '0' or '1'
+    const productWithAvailability = {
+      ...product,
+      unit: product.unit === 0 ? '0' : '1',
+    };
+
+    return NextResponse.json(productWithAvailability);
   } catch (error) {
     console.log('[PRODUCT_GET]', error);
     return new NextResponse('Internal Server Error', { status: 500 });
@@ -42,6 +52,7 @@ export async function PATCH(
       images,
       name,
       price,
+      unit,
       categoryId,
       sizeId,
       colorId,
@@ -63,6 +74,10 @@ export async function PATCH(
 
     if (!price) {
       return new NextResponse('Price is required', { status: 400 });
+    }
+
+    if (unit < 0) {
+      return new NextResponse('Unit must be >= 0', { status: 400 });
     }
 
     if (!categoryId) {
@@ -99,6 +114,7 @@ export async function PATCH(
       data: {
         name,
         price,
+        unit,
         categoryId,
         sizeId,
         colorId,

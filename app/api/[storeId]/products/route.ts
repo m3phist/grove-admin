@@ -13,6 +13,7 @@ export async function POST(
       images,
       name,
       price,
+      unit,
       categoryId,
       sizeId,
       colorId,
@@ -34,6 +35,10 @@ export async function POST(
 
     if (!price) {
       return new NextResponse('Price is required', { status: 400 });
+    }
+
+    if (unit < 0) {
+      return new NextResponse('Unit must be >= 0', { status: 400 });
     }
 
     if (!categoryId) {
@@ -67,6 +72,7 @@ export async function POST(
       data: {
         name,
         price,
+        unit,
         categoryId,
         sizeId,
         colorId,
@@ -111,6 +117,9 @@ export async function GET(
         colorId,
         isFeatured: isFeatured ? true : undefined,
         isArchived: false,
+        unit: {
+          gte: 0,
+        },
       },
       include: {
         images: true,
@@ -122,8 +131,13 @@ export async function GET(
         createdAt: 'desc',
       },
     });
+    //hiding the product unit for the public api endpoint
+    const productsWithAvailability = products.map((product) => ({
+      ...product,
+      unit: product.unit === 0 ? '0' : '1', // Convert 0 to '0', 1 to '1'
+    }));
 
-    return NextResponse.json(products);
+    return NextResponse.json(productsWithAvailability);
   } catch (error) {
     console.log('[PRODUCTS_GET]', error);
     return new NextResponse('Internal Server Error', { status: 500 });

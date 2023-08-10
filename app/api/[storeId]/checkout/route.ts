@@ -32,6 +32,15 @@ export async function POST(
     },
   });
 
+  // Check if any product has unit equal to 0
+  const productWithZeroUnits = products.find((product) => product.unit === 0);
+  if (productWithZeroUnits) {
+    return new NextResponse(
+      'One or more products selected has no units available',
+      { status: 400 }
+    );
+  }
+
   const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
   products.forEach((product) => {
