@@ -83,6 +83,13 @@ export async function POST(req: Request) {
             };
 
             updatedProducts.push(updatedProduct);
+            // Update the product in the database
+            await prismadb.product.update({
+              where: {
+                id: productId,
+              },
+              data: updatedProduct,
+            });
           }
         } catch (productError) {
           console.error('Error updating product:', productError);
