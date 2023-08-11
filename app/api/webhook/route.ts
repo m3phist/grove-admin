@@ -8,6 +8,9 @@ import prismadb from '@/lib/prismadb';
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = headers().get('Stripe-Signature') as string;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const client = require('twilio')(accountSid, authToken);
 
   let event: Stripe.Event;
 
@@ -57,33 +60,58 @@ export async function POST(req: Request) {
         (orderItem) => orderItem.productId
       );
 
-      await Promise.all(
-        productIds.map(async (productId: string) => {
-          try {
-            const product = await prismadb.product.findUnique({
-              where: {
-                id: productId,
-              },
-            });
+      console.log('Product IDs:', productIds);
 
-            if (product) {
-              if (product.unit > 0) {
-                await prismadb.product.update({
-                  where: {
-                    id: productId,
-                  },
-                  data: {
-                    unit: product.unit - 1,
-                    isArchived: product.unit - 1 === 0,
-                  },
-                });
-              }
-            }
-          } catch (productError) {
-            console.error('Error updating product:', productError);
+      const updatedProducts: Array<any> = [];
+
+      // Fetch and update products
+      for (const productId of productIds) {
+        try {
+          const product = await prismadb.product.findUnique({
+            where: {
+              id: productId,
+            },
+          });
+
+          if (product && product.unit > 0) {
+            const updatedProduct = {
+              ...product,
+              unit: product.unit - 1,
+              isArchived: product.unit === 1,
+            };
+
+            updatedProducts.push(updatedProduct);
           }
-        })
-      );
+        } catch (productError) {
+          console.error('Error updating product:', productError);
+        }
+      }
+
+      console.log('Updated products:', updatedProducts);
+
+      const soldOutProducts = updatedProducts
+        .filter((product) => product.isArchived)
+        .map((product) => product.name)
+        .join(', ');
+
+      if (soldOutProducts.length > 0) {
+        console.log('Sold out products:', soldOutProducts);
+
+        const messageBody = `The following products are sold out and archived: ${soldOutProducts}`;
+
+        await client.messages
+          .create({
+            body: messageBody,
+            from: process.env.TWILIO_PHONE_NUMBER,
+            to: process.env.MY_PHONE_NUMBER,
+          })
+          .then((message: any) =>
+            console.log('WhatsApp message sent:', message.sid)
+          )
+          .catch((error: any) =>
+            console.error('Error sending WhatsApp message:', error)
+          );
+      }
     } catch (orderError) {
       console.error('Error updating order:', orderError);
     }
